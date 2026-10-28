@@ -1,0 +1,7 @@
+# Files Semgrep should skip (keeps noise down)
+node_modules/
+dist/
+build/
+coverage/
+*.min.js
+frontend/dist/

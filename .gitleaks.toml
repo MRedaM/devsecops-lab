@@ -1,0 +1,18 @@
+# Gitleaks configuration
+# "useDefault" keeps the built-in rules (AWS keys, GitHub tokens, private keys, etc.)
+[extend]
+useDefault = true
+
+# Allowlist = findings you have reviewed and decided are NOT real secrets.
+# Every entry should have a comment explaining WHY. Reviewers read this file.
+[allowlist]
+description = "Reviewed false positives"
+paths = [
+  '''node_modules/''',
+  '''(.*?)(png|jpg|jpeg|gif|ico|svg|woff2?)$''',
+]
+
+# Example of a documented exception (uncomment and adapt after you triage a finding):
+# [[allowlist.regexes]]
+# description = "Juice Shop intentionally ships a fake demo credential"
+# regex = '''replace-with-the-exact-string'''

@@ -1,0 +1,75 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: the default token can only read the repo.
+# Each job asks for extra permissions only if it needs them.
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Secrets scan (Gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout (full history so Gitleaks can scan past commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # Personal GitHub accounts need no license key.
+          # Organization accounts need a free GITLEAKS_LICENSE secret.
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # needed to upload results to the Security tab
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep (report only, never fails the build yet)
+        # Day 1 goal: see the findings. Day 2 adds quality gates.
+        run: >
+          semgrep scan
+          --config p/default
+          --config p/owasp-top-ten
+          --config p/javascript
+          --config p/typescript
+          --sarif --output semgrep.sarif
+          --metrics off
+          app/
+
+      - name: Print a readable summary in the job log
+        run: semgrep scan --config p/default --config p/owasp-top-ten --metrics off --quiet app/ || true
+
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Keep the raw report as a build artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
