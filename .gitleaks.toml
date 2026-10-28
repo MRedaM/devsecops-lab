@@ -10,6 +10,20 @@ description = "Reviewed false positives"
 paths = [
   '''node_modules/''',
   '''(.*?)(png|jpg|jpeg|gif|ico|svg|woff2?)$''',
+
+  # Juice Shop seeds fake demo users with hardcoded passwords (e.g. admin123).
+  # They protect nothing; the app is deliberately vulnerable. Rule: generic-api-key.
+  '''^app/data/static/users\.yml$''',
+
+  # Unit-test fixture: the textbook jwt.io example token (sub 1234567890, John Doe).
+  # Not a real credential. Rule: jwt.
+  '''^app/frontend/src/app/app\.guard\.spec\.ts$''',
+
+  # Juice Shop's public demo RSA key, used to sign its JWTs so players can forge tokens.
+  # It is published in the upstream repo, so it is not secret. Rule: private-key.
+  # Real projects must rotate and vault keys like this instead.
+  '''^app/lib/insecurity\.ts$''',
+  '''^app/(infrastructure/)?terraform/networking\.tf$''',
 ]
 
 # Example of a documented exception (uncomment and adapt after you triage a finding):
