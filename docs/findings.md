@@ -1,44 +1,44 @@
 # Day 1 Findings
 
-Draft entries based on a manual read of the code. Confirm each one against the real Semgrep / Gitleaks output after the first pipeline run, and rewrite the "Why" in your own words.
+Scan result (first run): 85 Semgrep findings: 40 error, 42 warning, 3 note.
+GitHub shows Semgrep's own levels (error/warning/note) because the SARIF carries no security score, so Critical/High/Medium/Low all read 0.
 
 ## Finding 1
-- Tool / rule: Semgrep (expected: a sequelize/SQL injection rule from p/owasp-top-ten)
-- File and line: app/routes/login.ts:34
-- What it claims: User-controlled `req.body.email` is concatenated into a raw SQL query.
-- Verdict: intentional (Juice Shop), and a genuine vulnerability in any real app
-- Why: Template string interpolates the email straight into `sequelize.query`, so `' OR 1=1--` bypasses login. Juice Shop ships this on purpose (loginAdminChallenge).
-- Fix or exception: Use bind parameters (`replacements` / `bind`) instead of string interpolation. Fix would be a real change in a real app; here, record as intentional.
-- OWASP category: A05 Injection
+- Tool / rule: Semgrep `dockerfile.security.missing-user.missing-user` (error)
+- File and line: app/Dockerfile (first build stage, lines 1-20; confirm the exact line on the alert)
+- What it claims: The container runs as root because no `USER` instruction is set.
+- Verdict: false positive in practice (low risk)
+- Why: The Dockerfile is multi-stage. The `installer` stage has no `USER`, but it is discarded after the build. The shipped final stage sets `USER 65532` (line 39) on a distroless base.
+- Fix or exception: Optional hardening: run the build stage as non-root too, which limits what a malicious npm install script can do (A03). Needs a Docker build to verify, so not done blind. No suppression added.
+- OWASP category: A02 Security Misconfiguration (hardening angle: A03 Supply Chain Failures)
 
 ## Finding 2
-- Tool / rule: Semgrep (expected: same SQL injection rule)
-- File and line: app/routes/search.ts:23
-- What it claims: `criteria` from the request is interpolated into a LIKE query.
+- Tool / rule: Semgrep `javascript.express.security.audit.express-check-directory-listing.express-check-directory-listing` (error)
+- File and line: app/server.ts:290 (`/ftp`); similar at :269 (`/infrastructure`) and :294 (`/.well-known`)
+- What it claims: `serveIndex` exposes directory listings.
 - Verdict: intentional (Juice Shop)
-- Why: Same pattern as Finding 1 (unionSqlInjectionChallenge).
-- Fix or exception: Parameterize the query with `replacements`. Good candidate for the Task 5 fix-on-a-branch if you want a small, safe change.
-- OWASP category: A05 Injection
+- Why: The `/ftp` listing is the deliberate directoryListingChallenge.
+- Fix or exception: In a real app, remove `serveIndex` and serve only explicitly named files.
+- OWASP category: A02 Security Misconfiguration
 
-## Finding 3
-- Tool / rule: Gitleaks (expected: `private-key`)
-- File and line: app/lib/insecurity.ts:21 (also app/infrastructure/terraform/networking.tf:171)
-- What it claims: A hardcoded RSA private key is committed.
-- Verdict: intentional (Juice Shop)
-- Why: The key signs the app's JWTs and is public in the upstream repo; it protects nothing and exists so players can forge tokens. In a real repo this would be a true positive: rotate the key and move it to a vault.
-- Fix or exception: Allowlist by path in `.gitleaks.toml` with a comment (see below), not a blanket ignore.
-- OWASP category: A04 Cryptographic Failures
+## Finding 3 (to complete)
+- Tool / rule: Semgrep `javascript.express.security.audit.xss.pug.explicit-unescape.template-explicit-unescape`
+- File and line: TODO: copy from the alert. My grep of app/views/*.pug found no `!{` or `!=` output syntax, so check the file and line before deciding.
+- What it claims: A Pug template outputs data unescaped, which risks XSS.
+- Verdict: TODO (true positive vs. false positive depends on whether the flagged line really outputs user data)
+- Why: TODO
+- Fix or exception: TODO
+- OWASP category: A05 Injection (XSS)
 
-## Proposed `.gitleaks.toml` addition
+## Correction to my earlier drafts
+I predicted Semgrep would flag the SQL injection in app/routes/login.ts:34 and app/routes/search.ts:23. It did not, so those are not findings. The code is still vulnerable (string-interpolated queries); this is a SAST miss and a good example of why DAST (Day 3) exists.
 
-Add only after you have seen the real Gitleaks output and confirmed these are the hits:
-
-```toml
-[[allowlist.regexes]]
-description = "Juice Shop ships a deliberately public demo RSA key (JWT signing); not a real secret"
-regex = '''-----BEGIN RSA PRIVATE KEY-----\\r?\\nMIICXAIBAAKBgQDNwqLEe9'''
-```
+## Gitleaks triage
+Rules hit: generic-api-key, jwt, private-key. All were fake demo data and are allowlisted by path in `.gitleaks.toml`, each with a written reason:
+- app/data/static/users.yml: seeded demo users with fake passwords
+- app/frontend/src/app/app.guard.spec.ts: jwt.io example token in a unit test
+- app/lib/insecurity.ts and the terraform/networking.tf copies: Juice Shop's public demo RSA key (rotate and vault a key like this in a real project)
 
 ## Self-check answers
 
-Write your own answers here, out loud first, then in a sentence each (questions are in `day1-notes.md` section 6).
+Write your own answers here, out loud first, then a sentence each (questions are in `day1-notes.md` section 6).
