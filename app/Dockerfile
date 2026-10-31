@@ -1,6 +1,9 @@
 FROM node:24 AS installer
 COPY . /juice-shop
 WORKDIR /juice-shop
+# Build stage needs root for global npm installs and chown/chgrp below.
+# This stage is discarded; the shipped image runs as USER 65532 (final stage).
+USER root
 RUN npm install -g typescript@^6.0.3
 RUN npm install --omit=dev
 RUN npm dedupe --omit=dev
